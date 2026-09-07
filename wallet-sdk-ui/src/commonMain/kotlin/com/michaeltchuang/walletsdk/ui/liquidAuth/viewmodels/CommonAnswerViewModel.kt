@@ -496,7 +496,6 @@ open class CommonAnswerViewModel(
     suspend fun topUpViewerSessionVault(
         enteredAmount: String,
         viewerAddress: String,
-        creatorAddress: String,
         signer: MppWalletSigner,
     ): Result<Long?> {
         val amountUsdc = enteredAmount.toDoubleOrNull()?.takeIf { it > 0.0 } ?: 1.0
@@ -514,13 +513,13 @@ open class CommonAnswerViewModel(
                 mppPaymentViewerManager.clearPendingPayment()
                 Napier.e(
                     tag = TAG,
-                    message = "[VIEWER_SESSION_VAULT_TOPUP_ERR] viewer=$viewerAddress creator=$creatorAddress",
+                    message = "[VIEWER_SESSION_VAULT_TOPUP_ERR] viewer=$viewerAddress",
                     throwable = throwable,
                 )
             }
 
         val txId = topUpResult.getOrElse { return Result.failure(it) }
-        Napier.e(tag = TAG, message = "[VIEWER_SESSION_VAULT_TOPUP_OK] viewer=$viewerAddress creator=$creatorAddress txId=$txId")
+        Napier.e(tag = TAG, message = "[VIEWER_SESSION_VAULT_TOPUP_OK] viewer=$viewerAddress txId=$txId")
 
         val onChainRemaining =
             runCatching {
@@ -534,7 +533,7 @@ open class CommonAnswerViewModel(
             }.onFailure { throwable ->
                 Napier.e(
                     tag = TAG,
-                    message = "[VIEWER_SESSION_VAULT_TOPUP_REFRESH_ERR] viewer=$viewerAddress creator=$creatorAddress",
+                    message = "[VIEWER_SESSION_VAULT_TOPUP_REFRESH_ERR] viewer=$viewerAddress",
                     throwable = throwable,
                 )
             }.getOrNull()
