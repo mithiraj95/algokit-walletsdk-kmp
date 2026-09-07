@@ -473,7 +473,8 @@ private fun Header(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TopSquareIconButton(icon = Res.drawable.ic_dark_setting, onClick = onSettingsClick)
+            // TODO: Re-enable once viewer relaying fees are supported.
+            // TopSquareIconButton(icon = Res.drawable.ic_dark_setting, onClick = onSettingsClick)
             TopSquareIconButton(icon = Res.drawable.ic_minimise, onClick = onMinimize)
         }
     }
@@ -877,6 +878,7 @@ private fun LiquidAuthViewerScreenPreview() {
             cameraPreview = null,
             onMinimize = {},
             viewerAddress = "ABCDE...XYZ",
+            creatorUsername = "liquidstream.algo",
             originUrl = "https://example.app",
             networkLabel = "TESTNET",
             currentBlockNumber = 38291041L,

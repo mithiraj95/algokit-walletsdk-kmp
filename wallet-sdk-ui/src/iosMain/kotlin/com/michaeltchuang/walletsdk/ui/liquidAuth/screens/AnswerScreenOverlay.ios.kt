@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +41,7 @@ import com.michaeltchuang.walletsdk.ui.liquidStream.domain.manager.MppPaymentVie
 import com.michaeltchuang.walletsdk.ui.liquidStream.domain.usecases.SetupMppPaymentViewerUseCase
 import com.michaeltchuang.walletsdk.ui.liquidStream.screens.LiquidStreamViewerScreen
 import com.michaeltchuang.walletsdk.ui.liquidStream.viewmodels.LiquidAuthViewerViewModel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.compose.koinInject
 import platform.Foundation.NSLog
@@ -57,6 +59,7 @@ actual fun AnswerScreenOverlay() {
 
     val address = AnswerScreenState.accountAddress
     val origin = AnswerScreenState.origin
+    val scope = rememberCoroutineScope()
 
     val viewerManager: LiquidAuthConnectionManager = koinInject()
     // Inject use cases from Koin so the shared CommonAnswerViewModel can be constructed.
@@ -239,6 +242,20 @@ actual fun AnswerScreenOverlay() {
                     onMinimize = {
                         miniPlayerCameraPreviewState.value = viewerCameraPreview
                         streamHostUiModeState.value = StreamHostUiMode.Minimized
+                    },
+                    onTopUpConfirm = { enteredAmount ->
+                        if (address.isNotBlank()) {
+                            scope.launch {
+                                val signer = stateHolder.buildMppWalletSigner(address)
+                                if (signer != null) {
+                                    stateHolder.topUpViewerSessionVault(
+                                        enteredAmount = enteredAmount,
+                                        viewerAddress = address,
+                                        signer = signer,
+                                    )
+                                }
+                            }
+                        }
                     },
                     onSendClick = { text, amount, asset ->
                         stateHolder.sendChatMessage(text, amount, asset)

@@ -16,11 +16,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -71,7 +69,6 @@ actual fun AnswerScreenOverlay() {
     ) {
         val viewModel: AnswerViewModel = koinViewModel()
         val address = AnswerScreenState.accountAddress
-        var connectedHostAddress by remember { mutableStateOf("") }
 
         val fido2Client = remember { Fido2ApiClient(activity) }
 
@@ -358,7 +355,6 @@ actual fun AnswerScreenOverlay() {
                                     context = context,
                                     viewModel = viewModel,
                                     viewerAddress = address,
-                                    hostAddress = connectedHostAddress,
                                     enteredAmount = enteredAmount,
                                 )
                             }
@@ -447,20 +443,10 @@ private suspend fun topUpViewerSessionVault(
     context: Context,
     viewModel: AnswerViewModel,
     viewerAddress: String,
-    hostAddress: String,
     enteredAmount: String,
 ) {
     if (viewerAddress.isBlank()) {
         Toast.makeText(context, "No viewer account selected", Toast.LENGTH_LONG).show()
-        return
-    }
-    if (hostAddress.isBlank()) {
-        Toast
-            .makeText(
-                context,
-                "Missing stream recipient. Please wait for payment request and try again.",
-                Toast.LENGTH_LONG,
-            ).show()
         return
     }
 
@@ -474,7 +460,6 @@ private suspend fun topUpViewerSessionVault(
         .topUpViewerSessionVault(
             enteredAmount = enteredAmount,
             viewerAddress = viewerAddress,
-            creatorAddress = hostAddress,
             signer = signer,
         ).onSuccess { remaining ->
             if (remaining != null) {
