@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.michaeltchuang.walletsdk.ui.base.designsystem.theme.AlgoKitTheme
@@ -159,19 +160,26 @@ private fun GiftMessageItem(message: ChatUiMessage) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        vectorResource(Res.drawable.figma_ic_drop),
-                        contentDescription = null,
-                        tint = Color(0xFF2ED8EA),
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "@${message.sender.take(8).lowercase()}",
-                        color = Color(0xFFE8F4FF),
-                        fontSize = 12.sp,
-                    )
-                    Spacer(Modifier.weight(1f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            vectorResource(Res.drawable.figma_ic_drop),
+                            contentDescription = null,
+                            tint = Color(0xFF2ED8EA),
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "@${message.sender.lowercase()}",
+                            color = Color(0xFFE8F4FF),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Box(
                         modifier =
                             Modifier
@@ -255,7 +263,7 @@ fun ChatStackPreview() {
                             timestamp = 0L,
                         ),
                         ChatUiMessage(
-                            sender = "gift.algo",
+                            sender = "algo25.liquidstream.algo",
                             text = "Supporting the stream!",
                             timestamp = 0L,
                             amount = "10.0",

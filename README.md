@@ -128,7 +128,7 @@ timeline
              : ✅ Settings - Add Fnet network support
              : ✅ Liquid Stream - Add in chat and super-chat functionality
              : ✅ Testing - Add debug host mode for liquid stream (with multiple bot viewers)
-             : 🔄 Liquid Stream - Research lowering cost of (Lsig / smart contract) session vault for Algorand          
+             : ✅ Liquid Stream - Research lowering cost of (Lsig / smart contract) session vault for Algorand          
              
     section Future 🔮
     2026Q4   
