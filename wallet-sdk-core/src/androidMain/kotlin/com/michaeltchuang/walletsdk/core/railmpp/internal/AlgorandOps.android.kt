@@ -2,7 +2,6 @@ package com.michaeltchuang.walletsdk.core.railmpp.internal
 
 import android.util.Base64
 import android.util.Log
-import com.algorand.algosdk.account.LogicSigAccount
 import com.algorand.algosdk.crypto.Address
 import com.algorand.algosdk.crypto.Signature
 import com.algorand.algosdk.transaction.AppBoxReference
@@ -22,8 +21,13 @@ import com.michaeltchuang.walletsdk.core.railmpp.domain.repository.MppWalletSign
 import com.michaeltchuang.walletsdk.core.railmpp.domain.repository.MppWalletSignerType
 import com.michaeltchuang.walletsdk.core.utils.GoMobileDispatcher
 import io.github.algorandecosystem.sdk.Sdk
+import uniffi.algokit_transact_ffi.LogicSignature
+import uniffi.algokit_transact_ffi.decodeTransaction
+import uniffi.algokit_transact_ffi.encodeSignedTransaction
+import uniffi.algokit_transact_ffi.getLogicSignatureAddress
 import java.math.BigInteger
 import java.net.URI
+import uniffi.algokit_transact_ffi.SignedTransaction as RustSignedTransaction
 
 private const val TAG = "AlgorandOps"
 private const val SETTLEMENT_TEMPLATE_ASSET = "railmpp/EscrowSessionSettlementLogicSig.teal"
@@ -205,7 +209,9 @@ internal actual suspend fun compileSettlementLogicSigAddressInternal(
 ): String {
     val client = algodClient(algodUrl)
     val settlementProgram = compileSettlementProgram(client, appId, channelId, payeeAddress, authorizedSignerPublicKey)
-    return LogicSigAccount(settlementProgram, emptyList()).address.toString()
+    // AlgoKitTransact (algokit-core Rust library) instead of the Java SDK's LogicSigAccount —
+    // matches the iOS bridge, which uses the same Rust core for LogicSig address derivation.
+    return getLogicSignatureAddress(settlementProgram)
 }
 
 private fun compileSettlementProgram(
@@ -256,25 +262,22 @@ internal actual suspend fun submitLogicSigSettlementInternal(
                 ),
             ),
         )
-    val settlementLogicSig =
-        LogicSigAccount(
-            settlementProgram,
-            listOf(voucherSignature, encodeUint64(cumulativeAmountMicroUsdc)),
-        )
-    val paddingLogicSig = LogicSigAccount(paddingProgram, emptyList())
+    val settlementLogicSigArgs = listOf(voucherSignature, encodeUint64(cumulativeAmountMicroUsdc))
+    val settlementAddress = getLogicSignatureAddress(settlementProgram)
+    val paddingAddress = getLogicSignatureAddress(paddingProgram)
     ensureLogicSigSetup(
         client = client,
         payerSigner = payerSigner,
         appId = appId,
         channelId = channelId,
-        settlementLogicSig = settlementLogicSig,
-        paddingLogicSig = paddingLogicSig,
+        settlementAddress = settlementAddress,
+        paddingAddress = paddingAddress,
     )
     val params = client.TransactionParams().execute().body()
     val settlementTxn =
         Transaction
             .ApplicationCallTransactionBuilder()
-            .sender(settlementLogicSig.address)
+            .sender(settlementAddress)
             .suggestedParams(params)
             .applicationId(appId)
             .args(
@@ -298,18 +301,36 @@ internal actual suspend fun submitLogicSigSettlementInternal(
     val paddingTxn =
         Transaction
             .PaymentTransactionBuilder()
-            .sender(paddingLogicSig.address)
-            .receiver(paddingLogicSig.address)
+            .sender(paddingAddress)
+            .receiver(paddingAddress)
             .amount(0)
             .suggestedParams(params)
             .build()
             .also { it.fee = BigInteger.ZERO }
     TxGroup.assignGroupID(settlementTxn, paddingTxn)
-    val signedSettlement = settlementLogicSig.signLogicSigTransaction(settlementTxn)
-    val signedPadding = paddingLogicSig.signLogicSigTransaction(paddingTxn)
-    val txId = broadcast(client, listOf(Encoder.encodeToMsgPack(signedSettlement), Encoder.encodeToMsgPack(signedPadding)))
+    val signedSettlement = signWithLogicSig(settlementProgram, settlementLogicSigArgs, settlementTxn)
+    val signedPadding = signWithLogicSig(paddingProgram, emptyList(), paddingTxn)
+    val txId = broadcast(client, listOf(signedSettlement, signedPadding))
     Log.d(TAG, "[LSIG_SETTLEMENT_OK] txId=$txId appId=$appId cumulativeAmount=$cumulativeAmountMicroUsdc")
     return txId ?: settlementTxn.txID()
+}
+
+/**
+ * Signs [unsignedTxn] (built and grouped via the Java SDK) as an escrow LogicSig, using
+ * AlgoKitTransact (algokit-core Rust library) — the same core iOS uses for this operation.
+ * The unsigned transaction is re-encoded to canonical MsgPack, re-decoded through the Rust
+ * core, wrapped with the compiled [program] + [args] as a [LogicSignature], and re-encoded as
+ * a fully signed transaction ready to broadcast.
+ */
+private fun signWithLogicSig(
+    program: ByteArray,
+    args: List<ByteArray>,
+    unsignedTxn: Transaction,
+): ByteArray {
+    val decoded = decodeTransaction(Encoder.encodeToMsgPack(unsignedTxn))
+    val logicSignature = LogicSignature(logic = program, args = args.ifEmpty { null })
+    val signed = RustSignedTransaction(transaction = decoded, logicSignature = logicSignature)
+    return encodeSignedTransaction(signed)
 }
 
 internal actual fun decodeMsgPackAny(bytes: ByteArray): Any? = runCatching { Encoder.decodeFromMsgPack(bytes, Any::class.java) }.getOrNull()
@@ -421,11 +442,10 @@ private suspend fun ensureLogicSigSetup(
     payerSigner: MppWalletSigner,
     appId: Long,
     channelId: ByteArray,
-    settlementLogicSig: LogicSigAccount,
-    paddingLogicSig: LogicSigAccount,
+    settlementAddress: String,
+    paddingAddress: String,
 ) {
-    val settlementAddress = settlementLogicSig.address
-    val paddingAddress = paddingLogicSig.address
+    val settlementAddressBytes = Address(settlementAddress).getBytes()
     val registeredAddress =
         runCatching {
             client
@@ -436,7 +456,7 @@ private suspend fun ensureLogicSigSetup(
                 ?.value
                 ?.takeIf { it.size == Address.LEN_BYTES }
         }.getOrNull()
-    if (registeredAddress == null || !registeredAddress.contentEquals(settlementAddress.getBytes())) {
+    if (registeredAddress == null || !registeredAddress.contentEquals(settlementAddressBytes)) {
         // The contract only accepts setSettlementLogicSig from the channel's actual payer
         // (assert Txn.sender === data.payer). If the caller submitting settlement isn't the
         // payer (e.g. the payee auto-settling a viewer's voucher), a self-registration attempt
@@ -458,7 +478,7 @@ private suspend fun ensureLogicSigSetup(
                 signer = payerSigner,
                 params = params,
                 appId = appId,
-                args = listOf(SET_SETTLEMENT_LOGIC_SIG_SELECTOR, encodeArc4DynamicBytes(channelId), settlementAddress.getBytes()),
+                args = listOf(SET_SETTLEMENT_LOGIC_SIG_SELECTOR, encodeArc4DynamicBytes(channelId), settlementAddressBytes),
                 boxReferences =
                     listOf(
                         AppBoxReference(appId, channelId),
@@ -479,13 +499,13 @@ private suspend fun ensureLogicSigSetup(
 private suspend fun fundLogicSigIfNeeded(
     client: AlgodClient,
     payerSigner: MppWalletSigner,
-    address: Address,
+    address: String,
     targetBalance: Long,
 ) {
     val currentBalance =
         runCatching {
             client
-                .AccountInformation(address)
+                .AccountInformation(Address(address))
                 .execute()
                 .body()
                 ?.amount ?: 0L
