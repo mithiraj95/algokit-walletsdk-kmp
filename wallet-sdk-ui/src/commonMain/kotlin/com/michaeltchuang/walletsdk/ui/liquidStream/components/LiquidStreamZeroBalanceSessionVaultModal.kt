@@ -131,27 +131,7 @@ fun LiquidAuthSessionVaultModalContent(
                             ),
                         ),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 12.dp, end = 12.dp)
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x1AFFFFFF))
-                            .clickable(
-                                enabled = !isProcessing,
-                                onClick = onClose,
-                            ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        vectorResource(Res.drawable.ic_cross),
-                        contentDescription = "Close",
-                        tint = Color(0xFFB9EFEF),
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+
 
                 Column(
                     modifier =
